@@ -269,121 +269,118 @@ export const antigravityQuota = {
       return { groups }
     }
 
-    const modelGroups = [
-      {
-        id: 'claude-gpt',
-        label: 'Claude/GPT',
-        identifiers: [
-          'claude-sonnet-4-5-thinking',
-          'claude-opus-4-5-thinking',
-          'claude-opus-4-6-thinking',
-          'claude-sonnet-4-5',
-          'gpt-oss-120b-medium'
-        ]
-      },
-      {
-        id: 'gemini-3-pro',
-        label: 'Gemini 3 Pro',
-        identifiers: ['gemini-3-pro-high', 'gemini-3-pro-low']
-      },
-      {
-        id: 'gemini-2-5-pro',
-        label: 'Gemini 2.5 Pro',
-        identifiers: ['gemini-2.5-pro']
-      },
-      {
-        id: 'gemini-2-5-flash',
-        label: 'Gemini 2.5 Flash',
-        identifiers: ['gemini-2.5-flash', 'gemini-2.5-flash-thinking']
-      },
-      {
-        id: 'gemini-2-5-cu',
-        label: 'Gemini 2.5 CU',
-        identifiers: ['rev19-uic3-1p']
-      },
-      {
-        id: 'gemini-2-5-flash-lite',
-        label: 'Gemini 2.5 Flash Lite',
-        identifiers: ['gemini-2.5-flash-lite'],
-        hideInTable: true
-      },
-      {
-        id: 'gemini-3-flash',
-        label: 'Gemini 3 Flash',
-        identifiers: ['gemini-3-flash']
-      },
-      {
-        id: 'gemini-image',
-        label: 'Gemini Image',
-        identifiers: ['gemini-3-pro-image']
-      }
-    ]
-
-    const findModel = (identifiers: string[]) => {
-      for (const id of identifiers) {
-        const model = models[id]
-        if (model) return { id, entry: model }
-
-        for (const [key, entry] of Object.entries<any>(models)) {
-          const displayName = entry?.displayName || ''
-          if (displayName.toLowerCase() === id.toLowerCase()) {
-            return { id: key, entry }
-          }
+    const deprecatedRaw = data.deprecatedModelIds || data.deprecated_model_ids || {}
+    const deprecatedMap: Record<string, string> = {}
+    if (deprecatedRaw && typeof deprecatedRaw === 'object' && !Array.isArray(deprecatedRaw)) {
+      for (const [oldId, info] of Object.entries<any>(deprecatedRaw)) {
+        const newId = info?.newModelId || info?.new_model_id
+        if (typeof newId === 'string' && newId.trim()) {
+          deprecatedMap[oldId] = newId.trim()
         }
       }
-      return null
     }
 
-    for (const groupDef of modelGroups) {
-      const matches = []
-      for (const identifier of groupDef.identifiers) {
-        const match = findModel([identifier])
-        if (match) matches.push(match)
+    const mqueryModelIds = data.mqueryModelIds || data.mquery_model_ids || []
+    const hiddenModelIds = new Set<string>(Array.isArray(mqueryModelIds) ? mqueryModelIds : [])
+
+    const normalizeGroupName = (name: string) => {
+      const base = name.replace(/\s*\([^)]*\)\s*$/, '').trim()
+      return base || name
+    }
+
+    const resolveResetTime = (entries: Array<{ resetTime?: string }>) => {
+      let chosen: string | undefined
+      let minTs: number | null = null
+      for (const entry of entries) {
+        const resetTime = entry.resetTime
+        if (!resetTime) continue
+        const ts = Date.parse(resetTime)
+        if (!isNaN(ts)) {
+          if (minTs === null || ts < minTs) {
+            minTs = ts
+            chosen = resetTime
+          }
+        } else if (!chosen) {
+          chosen = resetTime
+        }
+      }
+      return chosen
+    }
+
+    type QuotaEntry = {
+      id: string
+      displayName: string
+      remainingFraction: number
+      resetTime?: string
+      hidden: boolean
+    }
+
+    const groupMap = new Map<string, { name: string; entries: QuotaEntry[] }>()
+
+    for (const [id, entry] of Object.entries<any>(models)) {
+      if (!entry || typeof entry !== 'object') continue
+      if (entry.isInternal === true) continue
+      const replacement = deprecatedMap[id]
+      if (replacement && models[replacement]) continue
+
+      const displayName = typeof entry.displayName === 'string' && entry.displayName.trim()
+        ? entry.displayName.trim()
+        : ''
+      if (!displayName) continue
+
+      const quotaInfo = entry?.quotaInfo || entry?.quota_info || {}
+      let remainingFraction = quotaInfo.remainingFraction || quotaInfo.remaining_fraction || quotaInfo.remaining
+
+      if (typeof remainingFraction === 'string' && remainingFraction.endsWith('%')) {
+        remainingFraction = parseFloat(remainingFraction) / 100
+      } else {
+        remainingFraction = parseFloat(remainingFraction)
       }
 
-      if (matches.length === 0) continue
+      if (isNaN(remainingFraction)) {
+        const resetTime = quotaInfo.resetTime || quotaInfo.reset_time
+        remainingFraction = resetTime ? 0 : null
+      }
 
-      const quotaEntries = matches
-        .map(({ id, entry }) => {
-          const quotaInfo = entry?.quotaInfo || entry?.quota_info || {}
-          let remainingFraction = quotaInfo.remainingFraction || quotaInfo.remaining_fraction || quotaInfo.remaining
+      if (remainingFraction === null) continue
 
-          if (typeof remainingFraction === 'string' && remainingFraction.endsWith('%')) {
-            remainingFraction = parseFloat(remainingFraction) / 100
-          } else {
-            remainingFraction = parseFloat(remainingFraction)
-          }
+      const normalized = Math.max(0, Math.min(1, remainingFraction))
+      const resetTime = quotaInfo.resetTime || quotaInfo.reset_time
+      const groupName = normalizeGroupName(displayName)
+      const groupKey = groupName.toLowerCase()
 
-          if (isNaN(remainingFraction)) {
-            const resetTime = quotaInfo.resetTime || quotaInfo.reset_time
-            remainingFraction = resetTime ? 0 : null
-          }
+      const target = groupMap.get(groupKey)
+      const quotaEntry: QuotaEntry = {
+        id,
+        displayName,
+        remainingFraction: normalized,
+        resetTime,
+        hidden: hiddenModelIds.has(id)
+      }
 
-          if (remainingFraction === null) return null
+      if (target) {
+        target.entries.push(quotaEntry)
+      } else {
+        groupMap.set(groupKey, { name: groupName, entries: [quotaEntry] })
+      }
+    }
 
-          return {
-            id,
-            remainingFraction: Math.max(0, Math.min(1, remainingFraction)),
-            resetTime: quotaInfo.resetTime || quotaInfo.reset_time,
-            displayName: entry?.displayName
-          }
-        })
-        .filter((e): e is NonNullable<typeof e> => e !== null)
+    for (const group of groupMap.values()) {
+      if (group.entries.length === 0) continue
 
-      if (quotaEntries.length === 0) continue
-
-      const remainingFraction = Math.min(...quotaEntries.map(e => e.remainingFraction))
+      const remainingFraction = Math.min(...group.entries.map(e => e.remainingFraction))
       const percent = Math.round(remainingFraction * 100)
-      const resetTime = quotaEntries.find(e => e.resetTime)?.resetTime
+      const resetTime = resolveResetTime(group.entries)
+      const hideInTable = group.entries.every(e => e.hidden)
 
       groups.push({
-        name: groupDef.label,
+        name: group.name,
         percent,
         remaining: percent,
         used: 100 - percent,
         total: 100,
         resetTime,
-        hideInTable: !!(groupDef as any).hideInTable
+        hideInTable
       })
     }
 
