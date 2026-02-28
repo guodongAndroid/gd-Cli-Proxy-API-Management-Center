@@ -12,7 +12,13 @@ export function useQuotaLoader() {
   const inFlight = new Map<string, Promise<QuotaResult>>()
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-  const getErrorStatus = (err: any) => err?.response?.status || err?.statusCode
+  const getErrorStatus = (err: any) => {
+    const direct = err?.response?.status || err?.statusCode || err?.status
+    if (typeof direct === 'number') return direct
+    const message = String(err?.message || '')
+    const match = message.match(/\b([1-5]\d{2})\b/)
+    return match ? Number(match[1]) : undefined
+  }
   const isRateLimited = (status?: number, message?: string) => {
     if (status === 429 || status === 503 || status === 502) return true
     const lower = message ? message.toLowerCase() : ''

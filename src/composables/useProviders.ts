@@ -18,10 +18,14 @@ export function useProviders() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const loadAll = async () => {
+  const loadAll = async (options: { force?: boolean } = {}) => {
+    const force = !!options.force
     loading.value = true
     error.value = null
     try {
+      if (force) {
+        configStore.invalidateProviders()
+      }
       const results = await Promise.all(
         PROVIDER_TYPES.map(type => configStore.fetchProviders(type).catch(() => []))
       )
@@ -36,8 +40,11 @@ export function useProviders() {
     }
   }
 
-  const loadByType = async (type: ProviderType) => {
+  const loadByType = async (type: ProviderType, options: { force?: boolean } = {}) => {
     try {
+      if (options.force) {
+        configStore.invalidateProviders(type)
+      }
       providersByType.value[type] = await configStore.fetchProviders(type)
     } catch (err: any) {
       error.value = err.message || `Failed to load ${type} providers`

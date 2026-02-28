@@ -60,6 +60,8 @@ const {
   deleteProvider,
   toggleProvider
 } = useProviders()
+
+const handleRefreshList = () => loadAll({ force: true })
 // Local State
 const searchText = ref('')
 const filterType = ref('')
@@ -499,7 +501,7 @@ onUnmounted(() => {
             {{ getProviderDisplayName(type) }}
           </option>
         </select>
-        <Button variant="outline" size="icon" @click="loadAll" :disabled="loading" title="刷新列表">
+        <Button variant="outline" size="icon" @click="handleRefreshList" :disabled="loading" title="刷新列表">
           <RefreshCw :class="cn('h-4 w-4', loading && 'animate-spin')" />
         </Button>
       </div>

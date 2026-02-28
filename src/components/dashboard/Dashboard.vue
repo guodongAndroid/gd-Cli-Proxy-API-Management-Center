@@ -224,55 +224,180 @@
 
     <div class="grid gap-4">
       <Card>
-        <CardHeader>
-          <CardTitle>错误来源与对应模型</CardTitle>
+        <CardHeader class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <CardTitle>请求事件明细</CardTitle>
+          <div class="flex flex-wrap items-center gap-2">
+            <select v-model="eventStatusFilter" :class="tableSelectClass">
+              <option value="all">全部状态</option>
+              <option value="success">仅成功</option>
+              <option value="failed">仅失败</option>
+            </select>
+            <select v-model="eventSortKey" :class="tableSelectClass">
+              <option value="time">按时间</option>
+              <option value="tokens">按 Tokens</option>
+            </select>
+            <select v-model="eventSortOrder" :class="tableSelectClass">
+              <option value="desc">降序</option>
+              <option value="asc">升序</option>
+            </select>
+          </div>
         </CardHeader>
         <CardContent>
-          <div v-if="sourceErrorRows.length === 0" class="text-sm text-muted-foreground">
-            暂无数据
+          <div v-if="requestEventRows.length === 0" class="text-sm text-muted-foreground">
+            暂无请求事件数据
           </div>
-          <div v-else class="rounded-md border">
+          <div v-else-if="filteredRequestEventRows.length === 0" class="text-sm text-muted-foreground">
+            当前筛选条件下暂无数据
+          </div>
+          <div v-else class="rounded-md border max-h-[320px] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-[160px]">来源</TableHead>
-                  <TableHead>模型（失败最多）</TableHead>
-                  <TableHead class="text-right w-[120px]">失败次数</TableHead>
-                  <TableHead class="text-right w-[100px]">失败率</TableHead>
+                  <TableHead class="w-[170px]">时间</TableHead>
+                  <TableHead class="w-[160px]">凭证</TableHead>
+                  <TableHead class="w-[140px]">来源</TableHead>
+                  <TableHead class="w-[140px]">API</TableHead>
+                  <TableHead>模型</TableHead>
+                  <TableHead class="w-[90px] text-center">状态</TableHead>
+                  <TableHead class="w-[110px] text-right">Tokens</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow v-for="row in pagedSourceErrorRows" :key="row.key">
-                  <TableCell class="font-medium">{{ row.name }}</TableCell>
-                  <TableCell>
-                    <div v-if="row.models.length === 0" class="text-xs text-muted-foreground">
-                      无失败模型
-                    </div>
-                    <div v-else class="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
-                      <Badge
-                        v-for="model in row.models"
-                        :key="model.key"
-                        variant="outline"
-                        class="text-[10px] flex-shrink-0"
-                      >
-                        {{ model.name }} · {{ formatNumber(model.failed) }}次
-                      </Badge>
-                    </div>
+                <TableRow v-for="row in pagedRequestEventRows" :key="row.key">
+                  <TableCell class="text-xs tabular-nums">{{ formatDateTime(row.timestamp) }}</TableCell>
+                  <TableCell class="font-mono text-xs">
+                    <div class="max-w-[180px] truncate" :title="row.authIndex">{{ row.authIndex }}</div>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums">{{ formatNumber(row.failed) }}</TableCell>
-                  <TableCell class="text-right tabular-nums">{{ row.rate.toFixed(1) }}%</TableCell>
+                  <TableCell class="text-xs">
+                    <div class="max-w-[160px] truncate" :title="row.source">{{ row.source }}</div>
+                  </TableCell>
+                  <TableCell class="text-xs">
+                    <div class="max-w-[160px] truncate" :title="row.api">{{ row.api }}</div>
+                  </TableCell>
+                  <TableCell class="text-xs">
+                    <div class="max-w-[220px] truncate" :title="row.model">{{ row.model }}</div>
+                  </TableCell>
+                  <TableCell class="text-center">
+                    <Badge :variant="row.failed ? 'destructive' : 'secondary'" class="text-[10px]">
+                      {{ row.failed ? '失败' : '成功' }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatTokens(row.totalTokens) }}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </div>
-          <div v-if="sourceErrorRows.length > 0" class="mt-3 flex items-center justify-between">
-            <p class="text-xs text-muted-foreground">基于明细统计，仅展示失败最多的 5 个模型</p>
-            <Pagination
-              v-if="sourceErrorTotalPages > 1"
-              :current-page="sourceErrorPage"
-              :total-pages="sourceErrorTotalPages"
-              @update:currentPage="sourceErrorPage = $event"
+          <div v-if="filteredRequestEventRows.length > 0" class="mt-3 flex items-center justify-between">
+            <p class="text-xs text-muted-foreground">共 {{ formatNumber(filteredRequestEventRows.length) }} 条事件</p>
+            <div class="flex items-center gap-2">
+              <Pagination
+                v-if="requestEventTotalPages > 1"
+                :current-page="requestEventPage"
+                :total-pages="requestEventTotalPages"
+                @update:currentPage="requestEventPage = $event"
+              />
+              <Input
+                v-model="eventPageInput"
+                type="number"
+                min="1"
+                :max="requestEventTotalPages"
+                class="h-8 w-20 text-center text-xs"
+                @keyup.enter="jumpRequestEventPage"
+                @blur="jumpRequestEventPage"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div class="grid gap-4">
+      <Card>
+        <CardHeader class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <CardTitle>凭证统计</CardTitle>
+          <div class="flex flex-wrap items-center gap-2">
+            <Input
+              v-model="credentialKeyword"
+              placeholder="筛选凭证"
+              class="h-8 w-44 text-xs"
             />
+            <select v-model="credentialSortKey" :class="tableSelectClass">
+              <option value="requests">按请求数</option>
+              <option value="failed">按失败数</option>
+              <option value="failureRate">按失败率</option>
+              <option value="totalTokens">按总Tokens</option>
+              <option value="lastSeen">按最近请求</option>
+            </select>
+            <select v-model="credentialSortOrder" :class="tableSelectClass">
+              <option value="desc">降序</option>
+              <option value="asc">升序</option>
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div v-if="credentialStatsRows.length === 0" class="text-sm text-muted-foreground">
+            暂无凭证统计数据
+          </div>
+          <div v-else-if="filteredCredentialStatsRows.length === 0" class="text-sm text-muted-foreground">
+            当前筛选条件下暂无数据
+          </div>
+          <div v-else class="rounded-md border max-h-[320px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead class="w-[180px]">凭证</TableHead>
+                  <TableHead class="text-right w-[95px]">请求数</TableHead>
+                  <TableHead class="text-right w-[95px]">失败数</TableHead>
+                  <TableHead class="text-right w-[95px]">失败率</TableHead>
+                  <TableHead class="text-right w-[110px]">总Tokens</TableHead>
+                  <TableHead class="text-right w-[120px]">平均Tokens/请求</TableHead>
+                  <TableHead class="text-right w-[110px]">来源数</TableHead>
+                  <TableHead class="text-right w-[110px]">模型数</TableHead>
+                  <TableHead>模型</TableHead>
+                  <TableHead class="w-[170px]">最近请求</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="row in pagedCredentialStatsRows" :key="row.key">
+                  <TableCell class="font-mono text-xs">
+                    <div class="max-w-[220px] truncate" :title="row.authIndex">{{ row.authIndex }}</div>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatNumber(row.requests) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatNumber(row.failed) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    <span :class="getFailureRateClass(row.failureRate)">{{ row.failureRate.toFixed(1) }}%</span>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatTokens(row.totalTokens) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatTokens(row.avgTokensPerRequest) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatNumber(row.sourceCount) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatNumber(row.modelCount) }}</TableCell>
+                  <TableCell class="text-xs">
+                    <div class="max-w-[260px] truncate" :title="row.topModels">{{ row.topModels }}</div>
+                  </TableCell>
+                  <TableCell class="text-xs tabular-nums">{{ row.lastSeenAt }}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+          <div v-if="filteredCredentialStatsRows.length > 0" class="mt-3 flex items-center justify-between">
+            <p class="text-xs text-muted-foreground">共 {{ formatNumber(filteredCredentialStatsRows.length) }} 个凭证</p>
+            <div class="flex items-center gap-2">
+              <Pagination
+                v-if="credentialStatsTotalPages > 1"
+                :current-page="credentialStatsPage"
+                :total-pages="credentialStatsTotalPages"
+                @update:currentPage="credentialStatsPage = $event"
+              />
+              <Input
+                v-model="credentialPageInput"
+                type="number"
+                min="1"
+                :max="credentialStatsTotalPages"
+                class="h-8 w-20 text-center text-xs"
+                @keyup.enter="jumpCredentialStatsPage"
+                @blur="jumpCredentialStatsPage"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -281,12 +406,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import { useUsageStore } from '../../stores/usage'
 import { usePagination } from '../../composables/usePagination'
 import UsageChart from './UsageChart.vue'
 import Button from '../ui/Button.vue'
+import Input from '../ui/Input.vue'
 import Card from '../ui/Card.vue'
 import CardHeader from '../ui/CardHeader.vue'
 import CardTitle from '../ui/CardTitle.vue'
@@ -346,6 +472,51 @@ const formatTokens = (num: number) => {
   }
   return num.toLocaleString()
 }
+
+const parseTimestamp = (value?: string) => {
+  if (!value) return null
+  const ts = Date.parse(value)
+  return Number.isNaN(ts) ? null : ts
+}
+
+const formatDateTime = (value?: string) => {
+  const ts = parseTimestamp(value)
+  if (ts === null) return '-'
+  return new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
+}
+
+const toFiniteNumber = (value: any) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : 0
+}
+
+const getDetailTotalTokens = (detail: any) => {
+  const tokens = detail?.tokens || {}
+  const total = toFiniteNumber(tokens.total_tokens)
+  if (total > 0) return total
+  return (
+    toFiniteNumber(tokens.input_tokens) +
+    toFiniteNumber(tokens.output_tokens) +
+    toFiniteNumber(tokens.reasoning_tokens) +
+    toFiniteNumber(tokens.cached_tokens)
+  )
+}
+
+const getFailureRateClass = (rate: number) => {
+  if (rate >= 20) return 'text-red-600 dark:text-red-400'
+  if (rate >= 5) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-green-600 dark:text-green-400'
+}
+
+const tableSelectClass = 'h-8 rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
 
 const maskApiName = (value: string) => {
   if (!value) return '***'
@@ -528,76 +699,243 @@ const errorByHourData = computed(() => {
   }
 })
 
-const sourceErrorRows = computed(() => {
-  const sourceTotals = new Map<string, number>()
-  const sourceFailed = new Map<string, number>()
-  const sourceModels = new Map<string, Map<string, { total: number; failed: number }>>()
-
-  usageDetails.value.forEach((detail: any) => {
-    const source = detail?.source || 'unknown'
-    sourceTotals.set(source, (sourceTotals.get(source) || 0) + 1)
-    if (detail?.failed) {
-      sourceFailed.set(source, (sourceFailed.get(source) || 0) + 1)
-    }
-  })
-
+const requestEventRows = computed(() => {
   const apis = usageData.value?.apis || {}
-  Object.values(apis).forEach((apiEntry: any) => {
+  const rows: Array<{
+    key: string
+    timestamp: string
+    timestampMs: number | null
+    authIndex: string
+    source: string
+    api: string
+    model: string
+    failed: boolean
+    totalTokens: number
+  }> = []
+
+  Object.entries(apis).forEach(([apiName, apiEntry]: [string, any]) => {
     const models = apiEntry?.models || {}
     Object.entries(models).forEach(([modelName, modelEntry]: [string, any]) => {
       const details = Array.isArray(modelEntry?.details) ? modelEntry.details : []
-      details.forEach((detail: any) => {
-        const source = detail?.source || 'unknown'
-        const modelMap = sourceModels.get(source) || new Map<string, { total: number; failed: number }>()
-        const current = modelMap.get(modelName) || { total: 0, failed: 0 }
-        current.total += 1
-        if (detail?.failed) {
-          current.failed += 1
-        }
-        modelMap.set(modelName, current)
-        sourceModels.set(source, modelMap)
+      details.forEach((detail: any, index: number) => {
+        const timestamp = String(detail?.timestamp || '')
+        const authIndex = String(detail?.auth_index || 'unknown')
+        const source = String(detail?.source || 'unknown')
+        const failed = Boolean(detail?.failed)
+        const totalTokens = getDetailTotalTokens(detail)
+        rows.push({
+          key: `${apiName}:${modelName}:${authIndex}:${timestamp || 'na'}:${index}`,
+          timestamp,
+          timestampMs: parseTimestamp(timestamp),
+          authIndex,
+          source,
+          api: apiName,
+          model: modelName,
+          failed,
+          totalTokens
+        })
       })
     })
   })
 
-  const rows = Array.from(sourceTotals.entries()).map(([name, total]) => {
-    const failed = sourceFailed.get(name) || 0
-    const modelMap = sourceModels.get(name) || new Map<string, { total: number; failed: number }>()
-    const models = Array.from(modelMap.entries())
-      .map(([modelName, stats]) => ({
-        key: `${name}:${modelName}`,
-        name: modelName,
-        failed: stats.failed,
-        rate: stats.total > 0 ? (stats.failed / stats.total) * 100 : 0
-      }))
-      .filter((entry) => entry.failed > 0)
-      .sort((a, b) => b.failed - a.failed)
-      .slice(0, 5)
+  return rows.sort((a, b) => {
+    const aTs = a.timestampMs ?? Number.NEGATIVE_INFINITY
+    const bTs = b.timestampMs ?? Number.NEGATIVE_INFINITY
+    return bTs - aTs
+  })
+})
 
-    return {
-      key: `source:${name}`,
-      name,
-      failed,
-      rate: total > 0 ? (failed / total) * 100 : 0,
-      models
+const eventStatusFilter = ref<'all' | 'success' | 'failed'>('all')
+const eventSortKey = ref<'time' | 'tokens'>('time')
+const eventSortOrder = ref<'desc' | 'asc'>('desc')
+
+const filteredRequestEventRows = computed(() => {
+  let rows = requestEventRows.value
+
+  if (eventStatusFilter.value === 'failed') {
+    rows = rows.filter((row) => row.failed)
+  } else if (eventStatusFilter.value === 'success') {
+    rows = rows.filter((row) => !row.failed)
+  }
+
+  const sorted = rows.slice()
+  const factor = eventSortOrder.value === 'asc' ? 1 : -1
+  sorted.sort((a, b) => {
+    if (eventSortKey.value === 'tokens') {
+      return (a.totalTokens - b.totalTokens) * factor
     }
+    const aTs = a.timestampMs ?? Number.NEGATIVE_INFINITY
+    const bTs = b.timestampMs ?? Number.NEGATIVE_INFINITY
+    return (aTs - bTs) * factor
+  })
+  return sorted
+})
+
+const credentialStatsRows = computed(() => {
+  const map = new Map<string, {
+    key: string
+    authIndex: string
+    requests: number
+    failed: number
+    totalTokens: number
+    lastSeenMs: number | null
+    sources: Set<string>
+    models: Set<string>
+    modelStats: Map<string, number>
+  }>()
+
+  requestEventRows.value.forEach((event) => {
+    const key = event.authIndex || 'unknown'
+    const existing = map.get(key) || {
+      key: `credential:${key}`,
+      authIndex: key,
+      requests: 0,
+      failed: 0,
+      totalTokens: 0,
+      lastSeenMs: null,
+      sources: new Set<string>(),
+      models: new Set<string>(),
+      modelStats: new Map<string, number>()
+    }
+
+    existing.requests += 1
+    if (event.failed) existing.failed += 1
+    existing.totalTokens += event.totalTokens
+    existing.sources.add(event.source || 'unknown')
+    const modelName = event.model || 'unknown'
+    existing.models.add(modelName)
+    existing.modelStats.set(modelName, (existing.modelStats.get(modelName) || 0) + 1)
+    if (event.timestampMs !== null) {
+      existing.lastSeenMs = existing.lastSeenMs === null
+        ? event.timestampMs
+        : Math.max(existing.lastSeenMs, event.timestampMs)
+    }
+
+    map.set(key, existing)
   })
 
-  return rows
-    .filter((row) => row.failed > 0)
-    .sort((a, b) => b.failed - a.failed)
+  return Array.from(map.values())
+    .map((row) => {
+      const failureRate = row.requests > 0 ? (row.failed / row.requests) * 100 : 0
+      const topModels = Array.from(row.modelStats.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, count]) => `${name}(${count})`)
+        .join(', ')
+      return {
+        key: row.key,
+        authIndex: row.authIndex,
+        requests: row.requests,
+        failed: row.failed,
+        failureRate,
+        totalTokens: row.totalTokens,
+        avgTokensPerRequest: row.requests > 0 ? row.totalTokens / row.requests : 0,
+        lastSeenMs: row.lastSeenMs,
+        lastSeenAt: row.lastSeenMs ? new Date(row.lastSeenMs).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }) : '-',
+        sourceCount: row.sources.size,
+        modelCount: row.models.size,
+        topModels: topModels || '-'
+      }
+    })
+    .sort((a, b) => {
+      if (b.requests !== a.requests) return b.requests - a.requests
+      if (b.failed !== a.failed) return b.failed - a.failed
+      return b.totalTokens - a.totalTokens
+    })
+})
+
+const credentialKeyword = ref('')
+const credentialSortKey = ref<'requests' | 'failed' | 'failureRate' | 'totalTokens' | 'lastSeen'>('requests')
+const credentialSortOrder = ref<'desc' | 'asc'>('desc')
+
+const filteredCredentialStatsRows = computed(() => {
+  const keyword = credentialKeyword.value.trim().toLowerCase()
+  let rows = credentialStatsRows.value
+  if (keyword) {
+    rows = rows.filter((row) => row.authIndex.toLowerCase().includes(keyword))
+  }
+
+  const sorted = rows.slice()
+  const factor = credentialSortOrder.value === 'asc' ? 1 : -1
+  sorted.sort((a, b) => {
+    switch (credentialSortKey.value) {
+      case 'failed':
+        return (a.failed - b.failed) * factor
+      case 'failureRate':
+        return (a.failureRate - b.failureRate) * factor
+      case 'totalTokens':
+        return (a.totalTokens - b.totalTokens) * factor
+      case 'lastSeen': {
+        const aMs = a.lastSeenMs ?? Number.NEGATIVE_INFINITY
+        const bMs = b.lastSeenMs ?? Number.NEGATIVE_INFINITY
+        return (aMs - bMs) * factor
+      }
+      case 'requests':
+      default:
+        return (a.requests - b.requests) * factor
+    }
+  })
+  return sorted
 })
 
 const {
-  currentPage: sourceErrorPage,
-  totalPages: rawSourceErrorPages,
-  paginatedData: pagedSourceErrorRows
-} = usePagination(sourceErrorRows, {
-  defaultPageSize: 15,
-  resetWatchers: [sourceErrorRows]
+  currentPage: requestEventPage,
+  totalPages: rawRequestEventTotalPages,
+  paginatedData: pagedRequestEventRows
+} = usePagination(filteredRequestEventRows, {
+  defaultPageSize: 20,
+  resetWatchers: [filteredRequestEventRows]
 })
 
-const sourceErrorTotalPages = computed(() => Math.max(1, rawSourceErrorPages.value))
+const requestEventTotalPages = computed(() => Math.max(1, rawRequestEventTotalPages.value))
+
+const {
+  currentPage: credentialStatsPage,
+  totalPages: rawCredentialStatsTotalPages,
+  paginatedData: pagedCredentialStatsRows
+} = usePagination(filteredCredentialStatsRows, {
+  defaultPageSize: 15,
+  resetWatchers: [filteredCredentialStatsRows]
+})
+
+const credentialStatsTotalPages = computed(() => Math.max(1, rawCredentialStatsTotalPages.value))
+
+const eventPageInput = ref('1')
+const credentialPageInput = ref('1')
+
+const clampPage = (page: number, totalPages: number) => {
+  const maxPage = Math.max(1, totalPages)
+  if (!Number.isFinite(page)) return 1
+  return Math.min(maxPage, Math.max(1, Math.floor(page)))
+}
+
+watch([requestEventPage, requestEventTotalPages], () => {
+  eventPageInput.value = String(clampPage(requestEventPage.value, requestEventTotalPages.value))
+}, { immediate: true })
+
+watch([credentialStatsPage, credentialStatsTotalPages], () => {
+  credentialPageInput.value = String(clampPage(credentialStatsPage.value, credentialStatsTotalPages.value))
+}, { immediate: true })
+
+const jumpRequestEventPage = () => {
+  const parsed = Number(eventPageInput.value)
+  requestEventPage.value = clampPage(parsed, requestEventTotalPages.value)
+  eventPageInput.value = String(requestEventPage.value)
+}
+
+const jumpCredentialStatsPage = () => {
+  const parsed = Number(credentialPageInput.value)
+  credentialStatsPage.value = clampPage(parsed, credentialStatsTotalPages.value)
+  credentialPageInput.value = String(credentialStatsPage.value)
+}
 
 const refreshData = () => {
   store.fetchUsage(true)

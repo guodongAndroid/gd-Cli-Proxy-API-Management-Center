@@ -532,6 +532,39 @@ export const codexQuota = {
   },
 
   parse(data: any, planTypeFromFile?: string | null): any {
+    let normalized = data
+    if (typeof normalized === 'string') {
+      try {
+        normalized = JSON.parse(normalized)
+      } catch {
+        throw new Error('Invalid Codex quota payload')
+      }
+    }
+
+    // Some proxy responses wrap the real payload in: { status_code, header, body: "<json string>" }
+    if (normalized && typeof normalized === 'object' && 'body' in normalized) {
+      const nestedStatus = normalized.status_code ?? normalized.statusCode
+      if (nestedStatus !== undefined && (nestedStatus < 200 || nestedStatus >= 300)) {
+        throw new Error(normalized.bodyText || normalized.body || `HTTP ${nestedStatus}`)
+      }
+      const nestedBody = normalized.body
+      if (typeof nestedBody === 'string') {
+        try {
+          normalized = JSON.parse(nestedBody)
+        } catch {
+          throw new Error('Invalid Codex quota payload body')
+        }
+      } else {
+        normalized = nestedBody
+      }
+    }
+
+    if (!normalized || typeof normalized !== 'object') {
+      throw new Error('Invalid Codex quota payload')
+    }
+
+    data = normalized
+
     const FIVE_HOUR_SECONDS = 18000
     const WEEK_SECONDS = 604800
 
@@ -543,12 +576,33 @@ export const codexQuota = {
 
     const rateLimit = data.rate_limit || data.rateLimit
     const codeReviewLimit = data.code_review_rate_limit || data.codeReviewRateLimit
+    const rateLimitReachedRaw = rateLimit?.limit_reached ?? rateLimit?.limitReached
+    const rateLimitReached =
+      rateLimitReachedRaw === true ||
+      rateLimitReachedRaw === 'true' ||
+      rateLimitReachedRaw === 1 ||
+      rateLimitReachedRaw === '1'
 
     const getWindowSeconds = (window: any): number | null => {
       if (!window) return null
       const raw = window.limit_window_seconds ?? window.limitWindowSeconds
       const num = parseFloat(raw)
       return Number.isFinite(num) ? num : null
+    }
+
+    const getWindowResetAt = (window: any): number | undefined => {
+      if (!window) return undefined
+      const direct = window.reset_at ?? window.resetAt
+      if (direct !== undefined && direct !== null && direct !== '') {
+        const parsed = parseFloat(direct)
+        if (!isNaN(parsed)) return Math.floor(parsed)
+      }
+      const after = window.reset_after_seconds ?? window.resetAfterSeconds
+      if (after !== undefined && after !== null && after !== '') {
+        const parsed = parseFloat(after)
+        if (!isNaN(parsed)) return Math.floor(Date.now() / 1000 + parsed)
+      }
+      return undefined
     }
 
     const classifyWindows = (limitInfo: any): { fiveHour: any; weekly: any; extra: any[] } => {
@@ -636,8 +690,10 @@ export const codexQuota = {
     crWindows.extra.forEach((w, i) => addWindow(w, `Review ${i + 1}`, codeReviewLimit))
 
     const campaignId = data.promo?.campaign_id || null
+    const rateLimitPrimaryWindow = rateLimit?.primary_window ?? rateLimit?.primaryWindow ?? null
+    const rateLimitResetAt = getWindowResetAt(rateLimitPrimaryWindow)
 
-    return { planType, limits, campaignId }
+    return { planType, limits, campaignId, rateLimitReached, rateLimitResetAt }
   }
 }
 

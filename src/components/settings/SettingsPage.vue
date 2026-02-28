@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
-import { RefreshCw, Loader2, Plus, Trash2, Eye, EyeOff, X } from 'lucide-vue-next'
+import { RefreshCw, Loader2, Plus, Trash2, Eye, EyeOff, X, Copy, Check } from 'lucide-vue-next'
 import { useNotificationStore } from '../../stores/notification'
 import { useAuthStore } from '../../stores/auth'
 import { configApi } from '../../api/config'
@@ -59,6 +59,9 @@ const apiKeys = ref<string[]>([])
 const apiKeysOriginal = ref<string[]>([])
 const newApiKey = ref('')
 const showApiKeys = ref(false)
+const singleVisibleApiKeyStates = reactive<Record<number, boolean>>({})
+const copiedApiKeyStates = reactive<Record<number, boolean>>({})
+const copyResetTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
 const modelsLoading = ref(false)
 const modelsError = ref('')
@@ -173,6 +176,14 @@ const loadApiKeys = async () => {
     const list = normalizeApiKeys(await apiKeysApi.list())
     apiKeys.value = list
     apiKeysOriginal.value = list.slice()
+    Object.keys(singleVisibleApiKeyStates).forEach((key) => {
+      delete singleVisibleApiKeyStates[Number(key)]
+    })
+    Object.keys(copiedApiKeyStates).forEach((key) => {
+      delete copiedApiKeyStates[Number(key)]
+    })
+    copyResetTimers.forEach((timer) => clearTimeout(timer))
+    copyResetTimers.clear()
   } catch (error: any) {
     notificationStore.error('加载 API Keys 失败: ' + error.message)
   } finally {
@@ -356,8 +367,59 @@ const handleAddApiKey = () => {
 }
 
 const handleRemoveApiKey = (index: number) => {
+  copyResetTimers.forEach((timer) => clearTimeout(timer))
+  copyResetTimers.clear()
+  Object.keys(singleVisibleApiKeyStates).forEach((key) => {
+    delete singleVisibleApiKeyStates[Number(key)]
+  })
+  Object.keys(copiedApiKeyStates).forEach((key) => {
+    delete copiedApiKeyStates[Number(key)]
+  })
   apiKeys.value.splice(index, 1)
 }
+
+const isApiKeyVisible = (index: number) => {
+  return showApiKeys.value || !!singleVisibleApiKeyStates[index]
+}
+
+const toggleSingleApiKeyVisibility = (index: number) => {
+  singleVisibleApiKeyStates[index] = !singleVisibleApiKeyStates[index]
+}
+
+const handleCopyApiKey = async (index: number) => {
+  const value = String(apiKeys.value[index] || '').trim()
+  if (!value) {
+    notificationStore.warning('API Key 为空，无法复制')
+    return
+  }
+
+  if (!navigator.clipboard?.writeText) {
+    notificationStore.error('当前环境不支持复制')
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(value)
+    copiedApiKeyStates[index] = true
+    const prevTimer = copyResetTimers.get(index)
+    if (prevTimer) {
+      clearTimeout(prevTimer)
+    }
+    const timer = setTimeout(() => {
+      delete copiedApiKeyStates[index]
+      copyResetTimers.delete(index)
+    }, 2000)
+    copyResetTimers.set(index, timer)
+    notificationStore.success('API Key 已复制')
+  } catch (error: any) {
+    notificationStore.error('复制失败: ' + (error.message || '未知错误'))
+  }
+}
+
+onBeforeUnmount(() => {
+  copyResetTimers.forEach((timer) => clearTimeout(timer))
+  copyResetTimers.clear()
+})
 
 const handleSaveApiKeys = async () => {
   if (saving.apiKeys) return
@@ -773,18 +835,37 @@ onMounted(async () => {
           <div v-else-if="apiKeys.length === 0" class="text-sm text-muted-foreground">
             暂无 API Keys
           </div>
-          <div v-else class="space-y-2">
-            <div v-for="(key, index) in apiKeys" :key="`${key}-${index}`" class="flex items-center gap-2">
-              <Input
-                v-model="apiKeys[index]"
-                :type="showApiKeys ? 'text' : 'password'"
-                class="font-mono text-xs"
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                class="text-destructive hover:text-destructive hover:bg-destructive/10"
-                @click="handleRemoveApiKey(index)"
+            <div v-else class="space-y-2">
+              <div v-for="(key, index) in apiKeys" :key="`${key}-${index}`" class="flex items-center gap-2">
+                <Input
+                  v-model="apiKeys[index]"
+                  :type="isApiKeyVisible(index) ? 'text' : 'password'"
+                  class="font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  @click="toggleSingleApiKeyVisibility(index)"
+                  :title="isApiKeyVisible(index) ? '隐藏该行' : '显示该行'"
+                >
+                  <EyeOff v-if="isApiKeyVisible(index)" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  @click="handleCopyApiKey(index)"
+                  :title="copiedApiKeyStates[index] ? '已复制' : '复制 API Key'"
+                  :class="copiedApiKeyStates[index] ? 'border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700' : ''"
+                >
+                  <Check v-if="copiedApiKeyStates[index]" class="h-4 w-4" />
+                  <Copy v-else class="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  class="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  @click="handleRemoveApiKey(index)"
               >
                 <Trash2 class="h-4 w-4" />
               </Button>

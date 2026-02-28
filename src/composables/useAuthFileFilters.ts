@@ -1,4 +1,4 @@
-import { computed, ref, Ref } from 'vue'
+import { computed, ref, Ref, watch } from 'vue'
 import type { AuthFile } from '../api/authFiles'
 
 /**
@@ -25,7 +25,15 @@ function extractUniqueValues<T>(
 /**
  * 认证文件筛选 Hook
  */
-export function useAuthFileFilters(files: Ref<AuthFile[]>) {
+interface AuthFileFilterOptions {
+  resolveStatus?: (file: AuthFile) => string
+  resolveUnavailable?: (file: AuthFile) => boolean
+}
+
+export function useAuthFileFilters(files: Ref<AuthFile[]>, options: AuthFileFilterOptions = {}) {
+  const resolveStatus = options.resolveStatus || ((file: AuthFile) => String(file.status || ''))
+  const resolveUnavailable = options.resolveUnavailable || ((file: AuthFile) => file.unavailable === true)
+
   // 筛选状态
   const searchText = ref('')
   const filterType = ref('')
@@ -39,7 +47,26 @@ export function useAuthFileFilters(files: Ref<AuthFile[]>) {
 
   // 动态提取可用的状态（从实际数据中获取）
   const availableStatuses = computed(() => {
-    return extractUniqueValues(files.value, 'status', (v) => String(v).toLowerCase())
+    const values = new Set<string>()
+    files.value.forEach((file) => {
+      const value = resolveStatus(file)
+      const normalized = String(value || '').toLowerCase().trim()
+      if (normalized) values.add(normalized)
+    })
+    return Array.from(values).sort()
+  })
+
+  // 当状态/类型选项变化后，若当前筛选值无效则回退到“全部”
+  watch(availableStatuses, (statuses) => {
+    if (filterStatus.value && !statuses.includes(filterStatus.value)) {
+      filterStatus.value = ''
+    }
+  })
+
+  watch(availableTypes, (types) => {
+    if (filterType.value && !types.includes(filterType.value)) {
+      filterType.value = ''
+    }
   })
 
   // 筛选后的数据
@@ -77,7 +104,7 @@ export function useAuthFileFilters(files: Ref<AuthFile[]>) {
     // 状态筛选
     if (filterStatus.value) {
       data = data.filter((file: AuthFile) => {
-        const fileStatus = (file.status || '').toLowerCase()
+        const fileStatus = resolveStatus(file).toLowerCase().trim()
         return fileStatus === filterStatus.value
       })
     }
@@ -85,9 +112,9 @@ export function useAuthFileFilters(files: Ref<AuthFile[]>) {
     // 可用性筛选
     if (filterUnavailable.value) {
       if (filterUnavailable.value === 'true') {
-        data = data.filter((file: AuthFile) => file.unavailable === true)
+        data = data.filter((file: AuthFile) => resolveUnavailable(file))
       } else if (filterUnavailable.value === 'false') {
-        data = data.filter((file: AuthFile) => !file.unavailable)
+        data = data.filter((file: AuthFile) => !resolveUnavailable(file))
       }
     }
 

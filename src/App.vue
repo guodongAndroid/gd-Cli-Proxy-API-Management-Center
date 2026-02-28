@@ -23,7 +23,7 @@ const notificationStore = useNotificationStore()
 
 const authStore = useAuthStore()
 const quotaStore = useQuotaStore()
-const activeTab = ref('files')
+const activeTab = ref('dashboard')
 
 const showConnectDialog = ref(!authStore.isConnected && !authStore.restoring)
 const connecting = ref(false)
@@ -134,12 +134,12 @@ const handleDisconnect = async () => {
       <!-- Navigation -->
       <div v-if="authStore.isConnected" class="flex items-center gap-4 border-b mb-6">
         <button
-          @click="activeTab = 'files'"
+          @click="activeTab = 'dashboard'"
           class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+          :class="activeTab === 'dashboard' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
         >
-          <FileText class="w-4 h-4" />
-          认证文件
+          <LayoutDashboard class="w-4 h-4" />
+          仪表盘
         </button>
         <button
           @click="activeTab = 'providers'"
@@ -150,6 +150,14 @@ const handleDisconnect = async () => {
           AI 提供商
         </button>
         <button
+          @click="activeTab = 'files'"
+          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
+          :class="activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+        >
+          <FileText class="w-4 h-4" />
+          认证文件
+        </button>
+        <button
           @click="activeTab = 'oauth'"
           class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
           :class="activeTab === 'oauth' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
@@ -158,20 +166,12 @@ const handleDisconnect = async () => {
           OAuth 登录
         </button>
         <button
-          @click="activeTab = 'dashboard'"
+          @click="activeTab = 'payload'"
           class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'dashboard' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+          :class="activeTab === 'payload' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
         >
-          <LayoutDashboard class="w-4 h-4" />
-          仪表盘
-        </button>
-        <button
-          @click="activeTab = 'logs'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'logs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <ScrollText class="w-4 h-4" />
-          日志
+          <Filter class="w-4 h-4" />
+          Payload 配置
         </button>
         <button
           @click="activeTab = 'settings'"
@@ -182,26 +182,26 @@ const handleDisconnect = async () => {
           设置
         </button>
         <button
-          @click="activeTab = 'payload'"
+          @click="activeTab = 'logs'"
           class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'payload' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+          :class="activeTab === 'logs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
         >
-          <Filter class="w-4 h-4" />
-          Payload 配置
+          <ScrollText class="w-4 h-4" />
+          日志
         </button>
       </div>
 
       <!-- Main Content -->
       <div v-if="authStore.isConnected" class="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
+        <Dashboard v-if="activeTab === 'dashboard'" />
+        <AiProvidersTable v-if="activeTab === 'providers'" />
         <KeepAlive>
           <AuthFileTable v-if="activeTab === 'files'" @stats="fileStats = $event" />
         </KeepAlive>
-        <AiProvidersTable v-if="activeTab === 'providers'" />
         <OAuthLoginTab v-if="activeTab === 'oauth'" />
-        <Dashboard v-if="activeTab === 'dashboard'" />
-        <LogViewer v-if="activeTab === 'logs'" />
-        <SettingsPage v-if="activeTab === 'settings'" />
         <PayloadConfigTab v-if="activeTab === 'payload'" />
+        <SettingsPage v-if="activeTab === 'settings'" />
+        <LogViewer v-if="activeTab === 'logs'" />
       </div>
       
       <div v-else-if="authStore.restoring" class="flex h-[400px] flex-col items-center justify-center rounded-lg border border-dashed text-center animate-in fade-in-50">
