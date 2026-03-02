@@ -5,10 +5,6 @@ import {
   RefreshCw,
   Trash2,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Plus,
   Edit,
   X,
@@ -34,6 +30,7 @@ import Button from '../ui/Button.vue'
 import Input from '../ui/Input.vue'
 import Label from '../ui/Label.vue'
 import Badge from '../ui/badge/Badge.vue'
+import Pagination from '../ui/pagination/Pagination.vue'
 import {
   Table,
   TableHeader,
@@ -679,24 +676,11 @@ onUnmounted(() => {
             <option :value="100">100</option>
           </select>
         </div>
-        <div class="flex items-center gap-1">
-          <Button variant="outline" size="icon" class="h-8 w-8" :disabled="currentPage === 1" @click="currentPage = 1">
-            <ChevronsLeft class="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" class="h-8 w-8" :disabled="currentPage === 1" @click="currentPage--">
-            <ChevronLeft class="h-4 w-4" />
-          </Button>
-          <div class="flex items-center gap-1 px-2">
-             <span class="text-sm font-medium">{{ currentPage }}</span>
-             <span class="text-sm text-muted-foreground">/ {{ totalPages }}</span>
-          </div>
-          <Button variant="outline" size="icon" class="h-8 w-8" :disabled="currentPage === totalPages" @click="currentPage++">
-            <ChevronRight class="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" class="h-8 w-8" :disabled="currentPage === totalPages" @click="currentPage = totalPages">
-            <ChevronsRight class="h-4 w-4" />
-          </Button>
-        </div>
+        <Pagination
+          :current-page="currentPage"
+          :total-pages="totalPages"
+          @update:currentPage="currentPage = $event"
+        />
       </div>
     </div>
     <!-- Add Provider Dialog -->

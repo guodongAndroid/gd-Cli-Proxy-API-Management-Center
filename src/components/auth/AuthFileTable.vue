@@ -239,9 +239,6 @@ const passesAttrFilters = (file: any) => {
     if (!attrField.value) return true;
     const attrs = getCachedAttributes(file);
     const isMissing = attrField.value.startsWith("missing:");
-    const field = isMissing
-        ? attrField.value.slice("missing:".length)
-        : attrField.value;
     const matches = (label: string) => {
         const present = hasAttr(attrs, label);
         return isMissing ? !present : present;

@@ -3,10 +3,104 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
       <h2 class="text-3xl font-bold tracking-tight">总览</h2>
-      <Button @click="refreshData" :disabled="loading" size="sm">
-        <RefreshCw :class="['mr-2 h-4 w-4', loading && 'animate-spin']" />
-        刷新数据
-      </Button>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-muted-foreground">自动刷新 {{ autoRefreshCountdownLabel }}</span>
+        <Button @click="refreshData" :disabled="dashboardRefreshing" size="sm">
+          <RefreshCw :class="['mr-2 h-4 w-4', dashboardRefreshing && 'animate-spin']" />
+          刷新数据
+        </Button>
+      </div>
+    </div>
+
+    <!-- Top Summary Cards -->
+    <div class="grid gap-4 md:grid-cols-4">
+      <Card
+        class="cursor-pointer border-border/80 bg-muted/35 transition-colors hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        tabindex="0"
+        role="button"
+        @click="handleTopCardClick('keys')"
+        @keydown.enter.prevent="handleTopCardClick('keys')"
+        @keydown.space.prevent="handleTopCardClick('keys')"
+      >
+        <CardContent class="p-5">
+          <div class="flex items-start gap-4">
+            <div class="rounded-lg bg-background/80 p-3 text-muted-foreground">
+              <KeyRound class="h-5 w-5" />
+            </div>
+            <div class="space-y-1">
+              <div class="text-4xl font-bold leading-none">{{ formatNumber(topSummary.managementKeys) }}</div>
+              <div class="text-base font-semibold leading-none">管理密钥</div>
+              <p class="text-xs text-muted-foreground">配置面板</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card
+        class="cursor-pointer border-border/80 bg-muted/35 transition-colors hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        tabindex="0"
+        role="button"
+        @click="handleTopCardClick('providers')"
+        @keydown.enter.prevent="handleTopCardClick('providers')"
+        @keydown.space.prevent="handleTopCardClick('providers')"
+      >
+        <CardContent class="p-5">
+          <div class="flex items-start gap-4">
+            <div class="rounded-lg bg-background/80 p-3 text-muted-foreground">
+              <Bot class="h-5 w-5" />
+            </div>
+            <div class="space-y-1">
+              <div class="text-4xl font-bold leading-none">{{ formatNumber(topSummary.providers.total) }}</div>
+              <div class="text-base font-semibold leading-none">AI 提供商</div>
+              <p class="text-xs text-muted-foreground">{{ providerBreakdownText }}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card
+        class="cursor-pointer border-border/80 bg-muted/35 transition-colors hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        tabindex="0"
+        role="button"
+        @click="handleTopCardClick('files')"
+        @keydown.enter.prevent="handleTopCardClick('files')"
+        @keydown.space.prevent="handleTopCardClick('files')"
+      >
+        <CardContent class="p-5">
+          <div class="flex items-start gap-4">
+            <div class="rounded-lg bg-background/80 p-3 text-muted-foreground">
+              <FileText class="h-5 w-5" />
+            </div>
+            <div class="space-y-1">
+              <div class="text-4xl font-bold leading-none">{{ formatNumber(topSummary.authFiles) }}</div>
+              <div class="text-base font-semibold leading-none">认证文件</div>
+              <p class="text-xs text-muted-foreground">OAuth 凭证</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card
+        class="cursor-pointer border-border/80 bg-muted/35 transition-colors hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        tabindex="0"
+        role="button"
+        @click="handleTopCardClick('models')"
+        @keydown.enter.prevent="handleTopCardClick('models')"
+        @keydown.space.prevent="handleTopCardClick('models')"
+      >
+        <CardContent class="p-5">
+          <div class="flex items-start gap-4">
+            <div class="rounded-lg bg-background/80 p-3 text-muted-foreground">
+              <Package class="h-5 w-5" />
+            </div>
+            <div class="space-y-1">
+              <div class="text-4xl font-bold leading-none">{{ formatNumber(topSummaryAvailableModels) }}</div>
+              <div class="text-base font-semibold leading-none">可用模型</div>
+              <p class="text-xs text-muted-foreground">所有提供的模型总数</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Stats Cards -->
@@ -250,8 +344,8 @@
             当前筛选条件下暂无数据
           </div>
           <div v-else class="rounded-md border max-h-[320px] overflow-auto">
-            <Table>
-              <TableHeader>
+            <table class="w-full caption-bottom text-sm">
+              <TableHeader class="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-background">
                 <TableRow>
                   <TableHead class="w-[170px]">时间</TableHead>
                   <TableHead class="w-[160px]">凭证</TableHead>
@@ -285,27 +379,16 @@
                   <TableCell class="text-right tabular-nums">{{ formatTokens(row.totalTokens) }}</TableCell>
                 </TableRow>
               </TableBody>
-            </Table>
+            </table>
           </div>
           <div v-if="filteredRequestEventRows.length > 0" class="mt-3 flex items-center justify-between">
             <p class="text-xs text-muted-foreground">共 {{ formatNumber(filteredRequestEventRows.length) }} 条事件</p>
-            <div class="flex items-center gap-2">
-              <Pagination
-                v-if="requestEventTotalPages > 1"
-                :current-page="requestEventPage"
-                :total-pages="requestEventTotalPages"
-                @update:currentPage="requestEventPage = $event"
-              />
-              <Input
-                v-model="eventPageInput"
-                type="number"
-                min="1"
-                :max="requestEventTotalPages"
-                class="h-8 w-20 text-center text-xs"
-                @keyup.enter="jumpRequestEventPage"
-                @blur="jumpRequestEventPage"
-              />
-            </div>
+            <Pagination
+              v-if="requestEventTotalPages > 1"
+              :current-page="requestEventPage"
+              :total-pages="requestEventTotalPages"
+              @update:currentPage="requestEventPage = $event"
+            />
           </div>
         </CardContent>
       </Card>
@@ -342,8 +425,8 @@
             当前筛选条件下暂无数据
           </div>
           <div v-else class="rounded-md border max-h-[320px] overflow-auto">
-            <Table>
-              <TableHeader>
+            <table class="w-full caption-bottom text-sm">
+              <TableHeader class="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-background">
                 <TableRow>
                   <TableHead class="w-[180px]">凭证</TableHead>
                   <TableHead class="text-right w-[95px]">请求数</TableHead>
@@ -377,27 +460,16 @@
                   <TableCell class="text-xs tabular-nums">{{ row.lastSeenAt }}</TableCell>
                 </TableRow>
               </TableBody>
-            </Table>
+            </table>
           </div>
           <div v-if="filteredCredentialStatsRows.length > 0" class="mt-3 flex items-center justify-between">
             <p class="text-xs text-muted-foreground">共 {{ formatNumber(filteredCredentialStatsRows.length) }} 个凭证</p>
-            <div class="flex items-center gap-2">
-              <Pagination
-                v-if="credentialStatsTotalPages > 1"
-                :current-page="credentialStatsPage"
-                :total-pages="credentialStatsTotalPages"
-                @update:currentPage="credentialStatsPage = $event"
-              />
-              <Input
-                v-model="credentialPageInput"
-                type="number"
-                min="1"
-                :max="credentialStatsTotalPages"
-                class="h-8 w-20 text-center text-xs"
-                @keyup.enter="jumpCredentialStatsPage"
-                @blur="jumpCredentialStatsPage"
-              />
-            </div>
+            <Pagination
+              v-if="credentialStatsTotalPages > 1"
+              :current-page="credentialStatsPage"
+              :total-pages="credentialStatsTotalPages"
+              @update:currentPage="credentialStatsPage = $event"
+            />
           </div>
         </CardContent>
       </Card>
@@ -406,9 +478,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import axios from 'axios'
+import { Bot, FileText, KeyRound, Package, RefreshCw } from 'lucide-vue-next'
 import { useUsageStore } from '../../stores/usage'
+import { useAuthStore } from '../../stores/auth'
+import { providersApi, type ProviderType } from '../../api/providers'
+import { authFilesApi } from '../../api/authFiles'
+import { apiKeysApi } from '../../api/apiKeys'
 import { usePagination } from '../../composables/usePagination'
 import UsageChart from './UsageChart.vue'
 import Button from '../ui/Button.vue'
@@ -421,7 +498,6 @@ import Badge from '../ui/badge/Badge.vue'
 import Progress from '../ui/progress/Progress.vue'
 import Pagination from '../ui/pagination/Pagination.vue'
 import {
-  Table,
   TableHeader,
   TableBody,
   TableHead,
@@ -430,6 +506,10 @@ import {
 } from '../ui/table'
 
 const store = useUsageStore()
+const authStore = useAuthStore()
+const emit = defineEmits<{
+  (e: 'navigate', tab: 'providers' | 'files' | 'settings'): void
+}>()
 
 const loading = computed(() => store.loading)
 const globalStats = computed(() => store.globalStats)
@@ -437,6 +517,98 @@ const requestsData = computed(() => store.requestsByDayChartData)
 const tokensData = computed(() => store.tokensByDayChartData)
 const usageData = computed(() => store.usageData)
 const usageDetails = computed(() => store.usageDetails)
+
+const createTopSummary = () => ({
+  managementKeys: 0,
+  authFiles: 0,
+  availableModels: 0,
+  providers: {
+    total: 0,
+    gemini: 0,
+    codex: 0,
+    claude: 0,
+    openai: 0,
+    vertex: 0
+  }
+})
+
+const topSummary = ref(createTopSummary())
+const topSummaryLoading = ref(false)
+const dashboardRefreshing = computed(() => loading.value || topSummaryLoading.value)
+
+const providerBreakdownText = computed(() => {
+  const providers = topSummary.value.providers
+  const base = `G:${providers.gemini} C:${providers.codex} Cl:${providers.claude} O:${providers.openai}`
+  return providers.vertex > 0 ? `${base} V:${providers.vertex}` : base
+})
+
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const autoRefreshRemainingMs = ref(AUTO_REFRESH_INTERVAL_MS)
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+const autoRefreshCountdownLabel = computed(() => {
+  const totalSeconds = Math.max(0, Math.floor(autoRefreshRemainingMs.value / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+})
+
+const resetAutoRefreshCountdown = () => {
+  autoRefreshRemainingMs.value = AUTO_REFRESH_INTERVAL_MS
+}
+
+const handleTopCardClick = (target: 'keys' | 'providers' | 'files' | 'models') => {
+  if (target === 'providers') {
+    emit('navigate', 'providers')
+    return
+  }
+  if (target === 'files') {
+    emit('navigate', 'files')
+    return
+  }
+  emit('navigate', 'settings')
+}
+
+const normalizeApiKeys = (keys: string[]) => {
+  const seen = new Set<string>()
+  return keys
+    .map((key) => String(key || '').trim())
+    .filter((key) => key && !seen.has(key) && seen.add(key))
+}
+
+const normalizeApiBase = (input: string) => {
+  let base = String(input || '').trim()
+  if (!base) return ''
+  base = base.replace(/\/?v0\/management\/?$/i, '')
+  base = base.replace(/\/+$/g, '')
+  if (!/^https?:\/\//i.test(base)) {
+    base = `http://${base}`
+  }
+  return base
+}
+
+const normalizeModelList = (payload: any): string[] => {
+  const raw = payload?.data ?? payload?.models ?? payload
+  const list: string[] = []
+  if (Array.isArray(raw)) {
+    raw.forEach((item) => {
+      if (!item) return
+      if (typeof item === 'string') {
+        list.push(item)
+        return
+      }
+      const id = item.id ?? item.name ?? item.model
+      if (id) list.push(String(id))
+    })
+  } else if (raw && typeof raw === 'object') {
+    Object.keys(raw).forEach((key) => list.push(String(key)))
+  }
+  const seen = new Set<string>()
+  return list
+    .map((model) => String(model).trim())
+    .filter((model) => model && !seen.has(model) && seen.add(model))
+    .sort((a, b) => a.localeCompare(b))
+}
 
 const successRateBadgeVariant = computed(() => {
   const rate = parseFloat(globalStats.value?.successRate || '0')
@@ -616,6 +788,10 @@ const topModels = computed(() => {
     .map(([name, values]) => ({ name, requests: values.requests, tokens: values.tokens }))
     .sort((a, b) => b.requests - a.requests)
     .slice(0, 6)
+})
+
+const topSummaryAvailableModels = computed(() => {
+  return topSummary.value.availableModels
 })
 
 const tokenBreakdown = computed(() => {
@@ -908,45 +1084,108 @@ const {
 
 const credentialStatsTotalPages = computed(() => Math.max(1, rawCredentialStatsTotalPages.value))
 
-const eventPageInput = ref('1')
-const credentialPageInput = ref('1')
+const loadTopSummary = async () => {
+  topSummaryLoading.value = true
+  try {
+    const providerTypes: ProviderType[] = ['gemini', 'codex', 'claude', 'openai', 'vertex']
+    const [apiKeysResult, authFilesResult, ...providerResults] = await Promise.allSettled([
+      apiKeysApi.list(),
+      authFilesApi.list(),
+      ...providerTypes.map((type) => providersApi.getProviders(type))
+    ])
 
-const clampPage = (page: number, totalPages: number) => {
-  const maxPage = Math.max(1, totalPages)
-  if (!Number.isFinite(page)) return 1
-  return Math.min(maxPage, Math.max(1, Math.floor(page)))
+    const next = createTopSummary()
+    const normalizedApiKeys = apiKeysResult.status === 'fulfilled'
+      ? normalizeApiKeys(apiKeysResult.value)
+      : []
+
+    next.managementKeys = normalizedApiKeys.length
+    if (!next.managementKeys && authStore.managementKey) {
+      next.managementKeys = 1
+    }
+
+    if (authFilesResult.status === 'fulfilled') {
+      const files = Array.isArray(authFilesResult.value?.files) ? authFilesResult.value.files : []
+      next.authFiles = files.length
+    }
+
+    if (authStore.isConnected && authStore.apiUrl && normalizedApiKeys.length > 0) {
+      const base = normalizeApiBase(authStore.apiUrl)
+      if (base) {
+        try {
+          const response = await axios.get(`${base}/v1/models`, {
+            headers: {
+              Authorization: `Bearer ${normalizedApiKeys[0]}`
+            }
+          })
+          next.availableModels = normalizeModelList(response.data).length
+        } catch (error) {
+          console.warn('Failed to load models from /v1/models:', error)
+        }
+      }
+    }
+
+    providerTypes.forEach((type, index) => {
+      const result = providerResults[index]
+      if (result.status !== 'fulfilled') return
+      const list = Array.isArray(result.value) ? result.value : []
+
+      next.providers.total += list.length
+      if (type === 'gemini') next.providers.gemini = list.length
+      if (type === 'codex') next.providers.codex = list.length
+      if (type === 'claude') next.providers.claude = list.length
+      if (type === 'openai') next.providers.openai = list.length
+      if (type === 'vertex') next.providers.vertex = list.length
+    })
+
+    topSummary.value = next
+  } catch (error) {
+    console.error('Failed to load dashboard top summary:', error)
+  } finally {
+    topSummaryLoading.value = false
+  }
 }
 
-watch([requestEventPage, requestEventTotalPages], () => {
-  eventPageInput.value = String(clampPage(requestEventPage.value, requestEventTotalPages.value))
-}, { immediate: true })
-
-watch([credentialStatsPage, credentialStatsTotalPages], () => {
-  credentialPageInput.value = String(clampPage(credentialStatsPage.value, credentialStatsTotalPages.value))
-}, { immediate: true })
-
-const jumpRequestEventPage = () => {
-  const parsed = Number(eventPageInput.value)
-  requestEventPage.value = clampPage(parsed, requestEventTotalPages.value)
-  eventPageInput.value = String(requestEventPage.value)
+const refreshData = async (options: { resetAutoRefresh?: boolean } = {}) => {
+  await Promise.all([
+    store.fetchUsage(true),
+    loadTopSummary()
+  ])
+  if (options.resetAutoRefresh !== false) {
+    resetAutoRefreshCountdown()
+  }
 }
 
-const jumpCredentialStatsPage = () => {
-  const parsed = Number(credentialPageInput.value)
-  credentialStatsPage.value = clampPage(parsed, credentialStatsTotalPages.value)
-  credentialPageInput.value = String(credentialStatsPage.value)
+const startAutoRefresh = () => {
+  if (autoRefreshTimer) return
+  autoRefreshTimer = setInterval(() => {
+    if (autoRefreshRemainingMs.value <= 1000) {
+      resetAutoRefreshCountdown()
+      if (!dashboardRefreshing.value) {
+        void refreshData({ resetAutoRefresh: false })
+      }
+      return
+    }
+    autoRefreshRemainingMs.value -= 1000
+  }, 1000)
 }
 
-const refreshData = () => {
-  store.fetchUsage(true)
+const stopAutoRefresh = () => {
+  if (!autoRefreshTimer) return
+  clearInterval(autoRefreshTimer)
+  autoRefreshTimer = null
 }
 
 onMounted(() => {
   store.fetchUsage()
+  loadTopSummary()
+  resetAutoRefreshCountdown()
+  startAutoRefresh()
   store.startPolling()
 })
 
 onUnmounted(() => {
+  stopAutoRefresh()
   store.stopPolling()
 })
 </script>

@@ -87,6 +87,10 @@ const handleDisconnect = async () => {
     authStore.disconnect()
   }
 }
+
+const handleDashboardNavigate = (tab: 'providers' | 'files' | 'settings') => {
+  activeTab.value = tab
+}
 </script>
 
 <template>
@@ -193,7 +197,7 @@ const handleDisconnect = async () => {
 
       <!-- Main Content -->
       <div v-if="authStore.isConnected" class="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-        <Dashboard v-if="activeTab === 'dashboard'" />
+        <Dashboard v-if="activeTab === 'dashboard'" @navigate="handleDashboardNavigate" />
         <AiProvidersTable v-if="activeTab === 'providers'" />
         <KeepAlive>
           <AuthFileTable v-if="activeTab === 'files'" @stats="fileStats = $event" />

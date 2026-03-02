@@ -4,7 +4,7 @@ defineProps<{ class?: string }>()
 </script>
 
 <template>
-  <div class="relative w-full overflow-auto">
+  <div class="relative w-full overflow-x-auto">
     <table :class="cn('w-full caption-bottom text-sm', $props.class)">
       <slot />
     </table>
