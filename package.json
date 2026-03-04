@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:single": "vite build --mode singlefile",
+    "build:split": "vite build --mode split",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -122,6 +122,12 @@ npm run preview
 npm run build
 ```
 
+默认输出单文件版本（便于独立部署）。如需传统分包输出，可执行：
+
+```bash
+npm run build:split
+```
+
 构建产物在 `dist/` 目录。
 
 ## 许可证
