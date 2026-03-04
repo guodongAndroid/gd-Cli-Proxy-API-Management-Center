@@ -98,101 +98,117 @@ const handleDashboardNavigate = (tab: 'providers' | 'files' | 'settings') => {
     <ToastContainer />
     <ConfirmDialog />
     <div class="container mx-auto py-10 px-4">
-      <!-- Header -->
-      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-8 gap-4">
-        <div class="space-y-1">
-          <h1 class="text-2xl font-semibold tracking-tight">CPABM</h1>
-          <p class="text-sm text-muted-foreground">高效管理您的认证文件。</p>
-        </div>
-        <div class="flex flex-col items-start sm:items-end gap-2">
-          <div class="flex items-center gap-2">
-            <Badge v-if="authStore.isConnected" variant="outline" class="h-8 gap-1 bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
-              <div class="h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-400" />
-              已连接
-            </Badge>
-            <Badge v-if="authStore.isConnected && quotaStore.isAnyLoading" variant="outline" class="h-8 gap-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
-              <Loader2 class="h-3 w-3 animate-spin" />
-              正在刷新额度
-            </Badge>
-            <Button v-if="!authStore.isConnected" size="sm" @click="showConnectDialog = true">连接</Button>
-            <Button
-              v-if="authStore.isConnected"
-              size="sm"
-              variant="outline"
-              @click="handleDisconnect"
-              title="断开连接"
-              class="hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800 transition-colors"
-            >
-              <LogOut class="h-4 w-4" />
-            </Button>
+      <div
+        :class="authStore.isConnected
+          ? 'sticky top-0 z-50 -mx-4 mb-6 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+          : ''"
+      >
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-8 gap-4">
+          <div class="space-y-1">
+            <h1 class="text-2xl font-semibold tracking-tight">CPABM</h1>
+            <p class="text-sm text-muted-foreground">高效管理您的认证文件。</p>
           </div>
-          <div v-if="authStore.isConnected" class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="font-medium text-foreground">数据状态</span>
-            <span>JSON缓存: {{ fileStats.jsonCached }}/{{ fileStats.jsonTotal }}</span>
-            <span>Quota缓存: {{ fileStats.quotaCached }}</span>
-            <span>Usage: {{ usageFetchedAtLabel }}</span>
+          <div class="flex flex-col items-start sm:items-end gap-2">
+            <div class="flex items-center gap-2">
+              <Badge v-if="authStore.isConnected" variant="outline" class="h-8 gap-1 bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                <div class="h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-400" />
+                已连接
+              </Badge>
+              <Badge v-if="authStore.isConnected && quotaStore.isAnyLoading" variant="outline" class="h-8 gap-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                <Loader2 class="h-3 w-3 animate-spin" />
+                正在刷新额度
+              </Badge>
+              <Button v-if="!authStore.isConnected" size="sm" @click="showConnectDialog = true">连接</Button>
+              <Button
+                v-if="authStore.isConnected"
+                size="sm"
+                variant="outline"
+                @click="handleDisconnect"
+                title="断开连接"
+                class="hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800 transition-colors"
+              >
+                <LogOut class="h-4 w-4" />
+              </Button>
+            </div>
+            <div v-if="authStore.isConnected" class="flex items-center gap-2 text-xs text-muted-foreground">
+              <span class="font-medium text-foreground">数据状态</span>
+              <span>JSON缓存: {{ fileStats.jsonCached }}/{{ fileStats.jsonTotal }}</span>
+              <span>Quota缓存: {{ fileStats.quotaCached }}</span>
+              <span>Usage: {{ usageFetchedAtLabel }}</span>
+            </div>
+            <div v-if="authStore.isConnected" class="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                class="inline-flex h-8 max-w-[320px] items-center rounded-md border border-border/80 bg-muted/45 px-3 font-mono text-[13px] text-foreground/80"
+                :title="authStore.apiUrl || '-'"
+              >
+                <span class="truncate">{{ authStore.apiUrl || '-' }}</span>
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Navigation -->
-      <div v-if="authStore.isConnected" class="flex items-center gap-4 border-b mb-6">
-        <button
-          @click="activeTab = 'dashboard'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'dashboard' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <LayoutDashboard class="w-4 h-4" />
-          仪表盘
-        </button>
-        <button
-          @click="activeTab = 'providers'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'providers' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <Settings class="w-4 h-4" />
-          AI 提供商
-        </button>
-        <button
-          @click="activeTab = 'files'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <FileText class="w-4 h-4" />
-          认证文件
-        </button>
-        <button
-          @click="activeTab = 'oauth'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'oauth' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <ShieldCheck class="w-4 h-4" />
-          OAuth 登录
-        </button>
-        <button
-          @click="activeTab = 'payload'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'payload' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <Filter class="w-4 h-4" />
-          Payload 配置
-        </button>
-        <button
-          @click="activeTab = 'settings'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'settings' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <Sliders class="w-4 h-4" />
-          设置
-        </button>
-        <button
-          @click="activeTab = 'logs'"
-          class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary"
-          :class="activeTab === 'logs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
-        >
-          <ScrollText class="w-4 h-4" />
-          日志
-        </button>
+        <!-- Navigation -->
+        <div v-if="authStore.isConnected" class="overflow-x-auto border-b">
+          <div class="flex min-w-max items-center gap-4">
+            <button
+              @click="activeTab = 'dashboard'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'dashboard' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <LayoutDashboard class="w-4 h-4" />
+              仪表盘
+            </button>
+            <button
+              @click="activeTab = 'providers'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'providers' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <Settings class="w-4 h-4" />
+              AI 提供商
+            </button>
+            <button
+              @click="activeTab = 'files'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <FileText class="w-4 h-4" />
+              认证文件
+            </button>
+            <button
+              @click="activeTab = 'oauth'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'oauth' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <ShieldCheck class="w-4 h-4" />
+              OAuth 登录
+            </button>
+            <button
+              @click="activeTab = 'payload'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'payload' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <Filter class="w-4 h-4" />
+              Payload 配置
+            </button>
+            <button
+              @click="activeTab = 'settings'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'settings' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <Sliders class="w-4 h-4" />
+              设置
+            </button>
+            <button
+              @click="activeTab = 'logs'"
+              class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap"
+              :class="activeTab === 'logs' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+            >
+              <ScrollText class="w-4 h-4" />
+              日志
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Main Content -->

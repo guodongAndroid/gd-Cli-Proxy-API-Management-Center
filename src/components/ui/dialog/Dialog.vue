@@ -25,7 +25,7 @@ function close() {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="open" class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" @click="close" />
+      <div v-if="open" class="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm" @click="close" />
     </Transition>
     <Transition
       enter-active-class="transition ease-out duration-200"
@@ -38,7 +38,7 @@ function close() {
       <div
         v-if="open"
         :class="cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
+          'fixed left-[50%] top-[50%] z-[71] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
           $props.class
         )"
         @click.stop

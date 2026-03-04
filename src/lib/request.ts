@@ -24,7 +24,6 @@ class RequestClient {
       }
     })
 
-    // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
         if (this.managementKey) {
@@ -35,7 +34,6 @@ class RequestClient {
       (error) => Promise.reject(error)
     )
 
-    // Response interceptor
     this.client.interceptors.response.use(
       (response) => response.data,
       (error) => {

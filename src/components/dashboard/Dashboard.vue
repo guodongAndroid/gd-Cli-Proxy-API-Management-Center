@@ -169,18 +169,34 @@
     <!-- Charts -->
     <div class="grid gap-4">
       <Card>
-        <CardHeader>
-          <CardTitle>每日请求与 Token 消耗</CardTitle>
+        <CardContent class="pt-6">
+          <ServiceHealthMonitor
+            :points="serviceHealthPoints"
+            window-label="最近 7 天 · 每15分钟"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="space-y-3">
+          <CardTitle>Token类型分布</CardTitle>
+          <div class="flex flex-wrap items-center gap-3">
+            <div
+              v-for="item in tokenTypeLegendItems"
+              :key="item.name"
+              class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <span class="h-[2px] w-5 rounded-full" :style="{ backgroundColor: item.color }" />
+              <span>{{ item.name }}</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent class="pt-2">
           <UsageChart
-            :x-axis-data="dailyCombined.dates"
-            :series="dailyCombined.series"
+            :x-axis-data="tokenTypeHourDistribution.dates"
+            :series="tokenTypeHourDistribution.series"
             type="line"
-            :y-axis="[
-              { name: '请求数' },
-              { name: 'Token 消耗' }
-            ]"
+            :y-axis="[{ name: 'Tokens' }]"
           />
         </CardContent>
       </Card>
@@ -189,28 +205,28 @@
     <div class="grid gap-4 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>每小时请求趋势</CardTitle>
+          <CardTitle>请求趋势</CardTitle>
         </CardHeader>
         <CardContent class="pt-2">
           <UsageChart
-            :x-axis-data="requestsHourData.dates"
-            :series-data="requestsHourData.values"
-            type="bar"
-            color="#0ea5e9"
+            :x-axis-data="requestTrendChart.dates"
+            :series="requestTrendChart.series"
+            type="line"
+            :y-axis="[{ name: '请求数' }]"
           />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>每小时 Token 消耗</CardTitle>
+          <CardTitle>Token使用趋势</CardTitle>
         </CardHeader>
         <CardContent class="pt-2">
           <UsageChart
-            :x-axis-data="tokensHourData.dates"
-            :series-data="tokensHourData.values"
+            :x-axis-data="tokenUsageTrendChart.dates"
+            :series="tokenUsageTrendChart.series"
             type="line"
-            color="#f97316"
+            :y-axis="[{ name: 'Tokens' }]"
           />
         </CardContent>
       </Card>
@@ -286,31 +302,17 @@
       </Card>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2">
+    <div class="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>每日错误趋势</CardTitle>
+          <CardTitle>错误趋势</CardTitle>
         </CardHeader>
         <CardContent class="pt-2">
           <UsageChart
-            :x-axis-data="errorByDayData.dates"
-            :series-data="errorByDayData.values"
+            :x-axis-data="errorTrendChart.dates"
+            :series="errorTrendChart.series"
             type="line"
-            color="#ef4444"
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>每小时错误趋势</CardTitle>
-        </CardHeader>
-        <CardContent class="pt-2">
-          <UsageChart
-            :x-axis-data="errorByHourData.dates"
-            :series-data="errorByHourData.values"
-            type="bar"
-            color="#f87171"
+            :y-axis="[{ name: '错误数' }]"
           />
         </CardContent>
       </Card>
@@ -488,6 +490,7 @@ import { authFilesApi } from '../../api/authFiles'
 import { apiKeysApi } from '../../api/apiKeys'
 import { usePagination } from '../../composables/usePagination'
 import UsageChart from './UsageChart.vue'
+import ServiceHealthMonitor from './ServiceHealthMonitor.vue'
 import Button from '../ui/Button.vue'
 import Input from '../ui/Input.vue'
 import Card from '../ui/Card.vue'
@@ -513,8 +516,6 @@ const emit = defineEmits<{
 
 const loading = computed(() => store.loading)
 const globalStats = computed(() => store.globalStats)
-const requestsData = computed(() => store.requestsByDayChartData)
-const tokensData = computed(() => store.tokensByDayChartData)
 const usageData = computed(() => store.usageData)
 const usageDetails = computed(() => store.usageDetails)
 
@@ -568,6 +569,13 @@ const handleTopCardClick = (target: 'keys' | 'providers' | 'files' | 'models') =
   }
   emit('navigate', 'settings')
 }
+
+const tokenTypeLegendItems = [
+  { key: 'input', name: '输入 Tokens', color: '#3b82f6' },
+  { key: 'output', name: '输出 Tokens', color: '#f97316' },
+  { key: 'cached', name: '缓存 Tokens', color: '#14b8a6' },
+  { key: 'reasoning', name: '思考 Tokens', color: '#8b5cf6' }
+] as const
 
 const normalizeApiKeys = (keys: string[]) => {
   const seen = new Set<string>()
@@ -689,6 +697,9 @@ const getFailureRateClass = (rate: number) => {
 }
 
 const tableSelectClass = 'h-8 rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+const SERVICE_HEALTH_DAYS = 7
+const SERVICE_HEALTH_SLOT_MINUTES = 15
+const SERVICE_HEALTH_YELLOW_THRESHOLD = 0.05
 
 const maskApiName = (value: string) => {
   if (!value) return '***'
@@ -709,37 +720,254 @@ const formatHourKey = (date: Date) => {
   return `${formatDayKey(date)} ${pad2(date.getHours())}`
 }
 
-const getSortedSeries = (record?: Record<string, number>) => {
-  if (!record) return { dates: [], values: [] }
-  const sortedEntries = Object.entries(record).sort(([a], [b]) => a.localeCompare(b))
-  return {
-    dates: sortedEntries.map(([date]) => date),
-    values: sortedEntries.map(([, value]) => value)
+const formatHourAxisLabel = (date: Date) => {
+  const hour = pad2(date.getHours())
+  if (date.getHours() === 0) {
+    return `${formatDayKey(date)} ${hour}:00`
   }
+  return `${hour}:00`
 }
 
-const dailyCombined = computed(() => ({
-  dates: requestsData.value.dates.length ? requestsData.value.dates : tokensData.value.dates,
-  series: [
-    {
-      name: '请求数',
-      data: requestsData.value.values,
-      type: 'bar' as const,
-      color: '#3b82f6',
-      yAxisIndex: 0
-    },
-    {
-      name: 'Token 消耗',
-      data: tokensData.value.values,
-      type: 'bar' as const,
-      color: '#f59e0b',
-      yAxisIndex: 1
-    }
-  ]
-}))
+const HOURS_WINDOW = 12
 
-const requestsHourData = computed(() => getSortedSeries(usageData.value?.requests_by_hour))
-const tokensHourData = computed(() => getSortedSeries(usageData.value?.tokens_by_hour))
+const buildRecentHourSlots = (endHourInput?: Date, windowSize = HOURS_WINDOW) => {
+  const endHour = endHourInput ? new Date(endHourInput) : new Date()
+  endHour.setMinutes(0, 0, 0)
+  return Array.from({ length: windowSize }, (_, index) => {
+    const hour = new Date(endHour)
+    hour.setHours(endHour.getHours() - (windowSize - 1 - index))
+    return {
+      key: formatHourKey(hour),
+      label: formatHourAxisLabel(hour)
+    }
+  })
+}
+
+const parseHourLikeKey = (key: string) => {
+  const trimmed = key.trim()
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2})(?::(\d{2}))?$/)
+  if (match) {
+    const year = Number(match[1])
+    const month = Number(match[2]) - 1
+    const day = Number(match[3])
+    const hour = Number(match[4])
+    const minute = match[5] ? Number(match[5]) : 0
+    if (![year, month, day, hour, minute].every(Number.isFinite)) return null
+    return new Date(year, month, day, hour, minute, 0, 0)
+  }
+  const ts = Date.parse(trimmed)
+  if (Number.isNaN(ts)) return null
+  return new Date(ts)
+}
+
+const usageHourBuckets = computed(() => {
+  const map = new Map<string, {
+    requests: number
+    failed: number
+    totalTokens: number
+    input: number
+    output: number
+    cached: number
+    reasoning: number
+  }>()
+
+  let latestHourTs: number | null = null
+
+  usageDetails.value.forEach((detail: any) => {
+    const timestamp = parseTimestamp(detail?.timestamp)
+    if (timestamp === null) return
+    const date = new Date(timestamp)
+    date.setMinutes(0, 0, 0)
+    const key = formatHourKey(date)
+    const bucket = map.get(key) || {
+      requests: 0,
+      failed: 0,
+      totalTokens: 0,
+      input: 0,
+      output: 0,
+      cached: 0,
+      reasoning: 0
+    }
+    const tokens = detail?.tokens || {}
+    bucket.requests += 1
+    if (detail?.failed) bucket.failed += 1
+    bucket.totalTokens += getDetailTotalTokens(detail)
+    bucket.input += toFiniteNumber(tokens.input_tokens)
+    bucket.output += toFiniteNumber(tokens.output_tokens)
+    bucket.cached += toFiniteNumber(tokens.cached_tokens)
+    bucket.reasoning += toFiniteNumber(tokens.reasoning_tokens)
+    map.set(key, bucket)
+    latestHourTs = latestHourTs === null ? date.getTime() : Math.max(latestHourTs, date.getTime())
+  })
+
+  // Fallback: when details are missing, derive request/token trends from hourly summary.
+  if (map.size === 0) {
+    const applySummary = (
+      record: Record<string, number> | undefined,
+      field: 'requests' | 'totalTokens'
+    ) => {
+      Object.entries(record || {}).forEach(([hourKey, value]) => {
+        const parsed = parseHourLikeKey(hourKey)
+        if (!parsed) return
+        parsed.setMinutes(0, 0, 0)
+        const key = formatHourKey(parsed)
+        const bucket = map.get(key) || {
+          requests: 0,
+          failed: 0,
+          totalTokens: 0,
+          input: 0,
+          output: 0,
+          cached: 0,
+          reasoning: 0
+        }
+        bucket[field] += toFiniteNumber(value)
+        map.set(key, bucket)
+        latestHourTs = latestHourTs === null ? parsed.getTime() : Math.max(latestHourTs, parsed.getTime())
+      })
+    }
+
+    applySummary(usageData.value?.requests_by_hour, 'requests')
+    applySummary(usageData.value?.tokens_by_hour, 'totalTokens')
+  }
+
+  const endHour = latestHourTs !== null ? new Date(latestHourTs) : new Date()
+  const hourSlots = buildRecentHourSlots(endHour)
+  const emptyBucket = {
+    requests: 0,
+    failed: 0,
+    totalTokens: 0,
+    input: 0,
+    output: 0,
+    cached: 0,
+    reasoning: 0
+  }
+  const entries = hourSlots.map((slot) => [slot, map.get(slot.key) || emptyBucket] as const)
+
+  return { entries }
+})
+
+const serviceHealthPoints = computed(() => {
+  const slotDurationMs = SERVICE_HEALTH_SLOT_MINUTES * 60 * 1000
+  const slotCount = Math.floor((SERVICE_HEALTH_DAYS * 24 * 60) / SERVICE_HEALTH_SLOT_MINUTES)
+  const now = Date.now()
+  const endSlotTimestamp = Math.floor(now / slotDurationMs) * slotDurationMs
+  const startSlotTimestamp = endSlotTimestamp - (slotCount - 1) * slotDurationMs
+
+  const points = Array.from({ length: slotCount }, (_, index) => ({
+    timestamp: startSlotTimestamp + index * slotDurationMs,
+    successCount: 0,
+    failureCount: 0
+  }))
+
+  usageDetails.value.forEach((detail: any) => {
+    const timestamp = parseTimestamp(detail?.timestamp)
+    if (timestamp === null || timestamp < startSlotTimestamp || timestamp > endSlotTimestamp + slotDurationMs - 1) {
+      return
+    }
+    const slotTimestamp = Math.floor(timestamp / slotDurationMs) * slotDurationMs
+    const index = Math.floor((slotTimestamp - startSlotTimestamp) / slotDurationMs)
+    if (index < 0 || index >= points.length) return
+    if (detail?.failed) {
+      points[index].failureCount += 1
+    } else {
+      points[index].successCount += 1
+    }
+  })
+
+  return points.map((point) => {
+    const total = point.successCount + point.failureCount
+    if (total === 0) {
+      return {
+        ...point,
+        failureRate: 0,
+        status: 'idle' as const
+      }
+    }
+    const failureRate = point.failureCount / total
+    if (failureRate === 0) {
+      return {
+        ...point,
+        failureRate,
+        status: 'success' as const
+      }
+    }
+    if (failureRate <= SERVICE_HEALTH_YELLOW_THRESHOLD) {
+      return {
+        ...point,
+        failureRate,
+        status: 'mixed' as const
+      }
+    }
+    return {
+      ...point,
+      failureRate,
+      status: 'failure' as const
+    }
+  })
+})
+
+const tokenTypeHourDistribution = computed(() => {
+  const entries = usageHourBuckets.value.entries
+
+  return {
+    dates: entries.map(([slot]) => slot.label),
+    series: tokenTypeLegendItems.map((item) => ({
+      name: item.name,
+      data: entries.map(([, bucket]) => bucket[item.key]),
+      type: 'line' as const,
+      area: true,
+      color: item.color
+    }))
+  }
+})
+
+const requestTrendChart = computed(() => {
+  const entries = usageHourBuckets.value.entries
+  return {
+    dates: entries.map(([slot]) => slot.label),
+    series: [
+      {
+        name: '请求数',
+        data: entries.map(([, bucket]) => bucket.requests),
+        type: 'line' as const,
+        area: true,
+        color: '#0ea5e9'
+      }
+    ]
+  }
+})
+
+const tokenUsageTrendChart = computed(() => {
+  const entries = usageHourBuckets.value.entries
+  return {
+    dates: entries.map(([slot]) => slot.label),
+    series: [
+      {
+        name: 'Token 使用量',
+        data: entries.map(([, bucket]) => bucket.totalTokens),
+        type: 'line' as const,
+        area: true,
+        color: '#f97316'
+      }
+    ]
+  }
+})
+
+const errorTrendChart = computed(() => {
+  const entries = usageHourBuckets.value.entries
+  return {
+    dates: entries.map(([slot]) => slot.label),
+    series: [
+      {
+        name: '错误数',
+        data: entries.map(([, bucket]) => bucket.failed),
+        type: 'line' as const,
+        area: true,
+        color: '#ef4444'
+      }
+    ]
+  }
+})
 
 const last24hRequests = computed(() => {
   const entries = Object.entries(usageData.value?.requests_by_hour || {}).sort(([a], [b]) => a.localeCompare(b))
@@ -841,38 +1069,6 @@ const tokenBreakdownItems = computed(() => {
     buildItem('reasoning', 'Reasoning Tokens', tokenBreakdown.value.reasoning),
     buildItem('cached', 'Cached Tokens', tokenBreakdown.value.cached)
   ].filter((item) => item.value > 0)
-})
-
-const errorByDayData = computed(() => {
-  const map = new Map<string, number>()
-  usageDetails.value.forEach((detail: any) => {
-    if (!detail?.failed) return
-    const timestamp = Date.parse(detail.timestamp)
-    if (Number.isNaN(timestamp)) return
-    const key = formatDayKey(new Date(timestamp))
-    map.set(key, (map.get(key) || 0) + 1)
-  })
-  const entries = Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  return {
-    dates: entries.map(([key]) => key),
-    values: entries.map(([, value]) => value)
-  }
-})
-
-const errorByHourData = computed(() => {
-  const map = new Map<string, number>()
-  usageDetails.value.forEach((detail: any) => {
-    if (!detail?.failed) return
-    const timestamp = Date.parse(detail.timestamp)
-    if (Number.isNaN(timestamp)) return
-    const key = formatHourKey(new Date(timestamp))
-    map.set(key, (map.get(key) || 0) + 1)
-  })
-  const entries = Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  return {
-    dates: entries.map(([key]) => key),
-    values: entries.map(([, value]) => value)
-  }
 })
 
 const requestEventRows = computed(() => {

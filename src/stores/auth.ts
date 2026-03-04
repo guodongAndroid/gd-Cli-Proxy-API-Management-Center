@@ -12,14 +12,14 @@ export const useAuthStore = defineStore('auth', () => {
   const apiUrl = ref(localStorage.getItem('apiUrl') || '')
   const managementKey = ref(localStorage.getItem('managementKey') || '')
 
-  // Register 401 handler — auto disconnect on auth failure
   let unauthorizedFired = false
   request.setUnauthorizedHandler(() => {
     if (unauthorizedFired) return
     unauthorizedFired = true
     disconnect()
-    // Reset flag after a short delay to allow re-triggering on next session
-    setTimeout(() => { unauthorizedFired = false }, 1000)
+    setTimeout(() => {
+      unauthorizedFired = false
+    }, 1000)
   })
 
   const connect = async (url: string, key: string) => {
@@ -47,19 +47,16 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('apiUrl')
     localStorage.removeItem('managementKey')
 
-    // Clear all cached data
     useConfigStore().invalidateProviders()
     useUsageStore().clearData()
     useQuotaStore().clearAll()
   }
 
-  // Restore connection from local storage
   if (apiUrl.value && managementKey.value) {
     restoring.value = true
     connect(apiUrl.value, managementKey.value)
       .catch(() => {
         console.warn('Failed to restore connection')
-        // Clear stale credentials
         localStorage.removeItem('apiUrl')
         localStorage.removeItem('managementKey')
         apiUrl.value = ''

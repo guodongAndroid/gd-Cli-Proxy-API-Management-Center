@@ -11,7 +11,7 @@ const handleRemove = (id: string) => {
 
 <template>
   <div
-    class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none"
+    class="fixed top-4 right-4 z-[70] flex flex-col gap-2 w-full max-w-sm pointer-events-none"
     aria-live="polite"
     aria-atomic="true"
   >
