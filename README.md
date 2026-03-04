@@ -128,7 +128,7 @@ npm run build
 npm run build:split
 ```
 
-构建产物在 `dist/` 目录。
+构建产物在 `dist/` 目录，单文件默认输出为 `management.html`。
 
 ## 许可证
 
